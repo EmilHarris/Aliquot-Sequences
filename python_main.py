@@ -1,2 +1,3 @@
 # Python code here
-print('hello')
+print('hello world')
+print('Daniel was here')
