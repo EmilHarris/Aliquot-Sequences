@@ -5,13 +5,13 @@ import time as t
 import json
 
 # Set default values for K, I, and the maximum n value
-K_norm = 60
+K_norm = 30
 
-I_norm = 1e11
+I_norm = 10**9
 
-n_max = 100000
+n_max = 20000
 
-json_max = 30000
+json_max = 50000
 
 start_time = t.perf_counter()
 
@@ -178,7 +178,7 @@ def aliq_seq(n, K=K_norm, I=I_norm):
     curr_n = n
     # loop max k times to compute and check each s(n)
     # return always ends the function so no more code will run after one of the checks is 'failed'
-    for k in range(K - 1):
+    for k in range(K):
 
         # check if sequence is terminated
         if curr_n == 0:
