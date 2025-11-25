@@ -1,70 +1,92 @@
 # Imports
 import math as m
 import numpy as np
+import time as t
+import json
 
 # Set default values for K, I, and the maximum n value
-K_norm = 30
+K_norm = 60
 
-I_norm = 1e9
+I_norm = 1e11
 
-n_max = 20000
+n_max = 100000
+
+json_max = 30000
+
+start_time = t.perf_counter()
 
 
-# Prime sieve is an efficient way to find all the primes up to (and including) n
-def prime_sieve(maximum=n_max):
+def extend_prime_mask(old_mask, old_max, new_max):
+    prime_mask = old_mask + [True for _ in range(old_max + 1, new_max + 1)]
 
-    # There are no primes less than 2
-    if maximum < 2:
-        return None
-
-    # Will create a list of True or False values corresponding to whether the index is a prime number
-    # e.g. 3 is a prime number so the value in the 3rd index (4th position) will be true by the end of the function
-    prime_mask = [True for _ in range(maximum+1)]
-
-    # 0 and 1 are not prime
     prime_mask[0], prime_mask[1] = False, False
 
-    # Only need to check up to root n
-    for p in range(2, int(m.sqrt(maximum)) + 1):
+    for p in range(2, int(m.sqrt(new_max)) + 1):
         if prime_mask[p]:
-            # go over multiples of each prime number, which will not be prime, and so set value in prime_mask to False
-            for i in range(p*p, maximum+1, p):
+
+            for i in range(p**2, new_max+1, p):
                 prime_mask[i] = False
 
-    # change prime_mask into a numpy array so we can use a boolean mask
-    prime_mask = np.array(prime_mask)
-
-    # generate the array of numbers up to n and apply boolean mask to create array of prime numbers
-    return np.array([i for i in range(maximum+1)])[prime_mask]
+    return prime_mask
 
 
 # PRIMES calculated using prime sieve up to the largest n we are going up to, divided by 2
 # We can stop here as n cannot have a prime factor larger than n/2
 # this can then be used to calculate s(n) for ALL the ns up to n_max, instead of prime_sieve being called for every n
-def get_primes(n=n_max):
+def get_prime_mask(n=n_max):
 
     try:
-        with open('primes.txt', 'r') as f:
+        f = open('prime_mask.txt', 'r')
 
-            lines = f.readlines()
-            n_cached = lines[0]
-            primes = [int(p) for p in lines[1:]]
+        lines = f.readlines()
+        prime_mask = [bool(x) for x in lines]
+        maximum = len(prime_mask) - 1
 
-        if n_cached < n:
-            primes.append(prime_sieve())
+        f.close()
 
     except FileNotFoundError:
-        primes = prime_sieve(int(n/2) + 1)
+        prime_mask = []
+        maximum = -1
+
+    if maximum < n:
+        prime_mask = extend_prime_mask(prime_mask, maximum, n)
+
+    prime_str = [str(x) for x in prime_mask]
+
+    with open('primes.txt', 'w') as f:
+        f.write('\n'.join(prime_str))
+
+    return prime_mask[:n+1]
 
 
+nums = np.array([i for i in range(n_max + 1)])
+PRIMES = nums[get_prime_mask()]
+print(f'primes found after {t.perf_counter() - start_time}')
 
-    return primes
+
+def convert_keys(d):
+    new = {}
+    for k, v in d.items():
+        k = float(k)
+        new[k] = convert_keys(v) if isinstance(v, dict) else v
+    return new
 
 
-PRIMES = get_primes()
+try:
+    with open('factorisations.json', 'r') as f:
+        factorisations = convert_keys(json.load(f))
+
+except FileNotFoundError:
+    factorisations = {}
+
 
 # Using the PRIMES list get the prime factors of a umber n
 def get_prime_factors(n):
+
+    global factorisations
+
+    if n in factorisations:
+        return factorisations[n]
 
     primes = PRIMES
 
@@ -87,6 +109,18 @@ def get_prime_factors(n):
 
             # now we set n to n / prime so we dont count the same prime factor more than once
             n = n / prime
+
+            if n in factorisations:
+                facts = factorisations[n].copy()
+
+                for key, power in prime_factors.items():
+                    try:
+                        facts[key] += power
+
+                    except KeyError:
+                        facts[key] = power
+
+                return facts
 
             # check if this new n is still divisible by the same prime.
             # For as long as it works keep increasing the exponent value assigned to the prime, and dividing n
@@ -111,6 +145,8 @@ def get_prime_factors(n):
 # Calculate s(n)
 def s(n):
 
+    global factorisations
+
     # 1 has no proper divisors
     if n == 1:
         return 0
@@ -119,7 +155,9 @@ def s(n):
     # to calculate the sum of all the factors of n using only its prime factors
     total = 1
 
-    primes = get_prime_factors(n).items()
+    primes_dict = get_prime_factors(n)
+    primes = primes_dict.items()
+    factorisations[n] = primes_dict
 
     for prime, power in primes:
         total *= (prime**(power+1) - 1)/(prime - 1)
@@ -175,5 +213,18 @@ for i in range(1, n_max + 1):
     status = aliq_seq(i)[1]
     counts[status] += 1
 
-# output counts (for testing)
+print(f'aliquot sequences found after {t.perf_counter() - start_time}')
 print(counts)
+
+with open('factorisations.json', 'w') as f:
+    json_factorisations = {}
+
+    for key in factorisations.keys():
+        if key <= json_max:
+            json_factorisations[int(key)] = factorisations[key]
+    factorisations_obj = json.dumps(factorisations)
+    f.writelines(factorisations_obj)
+
+# output counts (for testing)
+print(f'finished after {t.perf_counter() - start_time}')
+
