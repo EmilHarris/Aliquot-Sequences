@@ -1,21 +1,20 @@
-# Imports
 import functools
+# Imports
 import math as m
 import numpy as np
 import time as t
 
 # Set default values for K, I, and the maximum n value
-K_norm = 100
+K_norm = 1000
 
-I_norm = 1e10
+I_norm = 1e12
 
-n_max = 30000
-
-json_max = 1000000
+n_max = 100000
 
 start_time = t.perf_counter()
 
 
+# Prime sieve is an efficient way to find all the primes up to (and including) n
 def prime_sieve(maximum=n_max):
 
     # There are no primes less than 2
@@ -36,29 +35,24 @@ def prime_sieve(maximum=n_max):
             for i in range(p*p, maximum+1, p):
                 prime_mask[i] = False
 
+    # change prime_mask into a numpy array so we can use a boolean mask
+    prime_mask = np.array(prime_mask)
+
     # generate the array of numbers up to n and apply boolean mask to create array of prime numbers
     return np.array([i for i in range(maximum+1)])[prime_mask]
 
 
+# PRIMES calculated using prime sieve up to the largest n we are going up to, divided by 2
+# We can stop here as n cannot have a prime factor larger than n/2
+# this can then be used to calculate s(n) for ALL the ns up to n_max, instead of prime_sieve being called for every n
 t1 = t.perf_counter()
-PRIMES = prime_sieve()
-print(f'primes found in {t.perf_counter() - t1}s')
-factorisations = {}
-
-c1 = 0
-c2 = 0
+PRIMES = prime_sieve(int(n_max/2) + 1)
+t2 = t.perf_counter()
+print(f'prime_sieve took {t2-t1}s')
 
 
-# Using the PRIMES list get the prime factors of a number n
+# Using the PRIMES list get the prime factors of a umber n
 def get_prime_factors(n):
-
-    global factorisations
-    global c1
-    global c2
-    c1 += 1
-
-    if n in factorisations:
-        return factorisations[n]
 
     primes = PRIMES
 
@@ -79,21 +73,8 @@ def get_prime_factors(n):
         if n % prime == 0:
             prime_factors[int(prime)] = 1
 
-            # now we set n to n / prime, so we don't count the same prime factor more than once
+            # now we set n to n / prime so we dont count the same prime factor more than once
             n = n / prime
-
-            if n in factorisations:
-                c2 += 1
-                facts = factorisations[n].copy()
-
-                for key, power in prime_factors.items():
-                    try:
-                        facts[key] += power
-
-                    except KeyError:
-                        facts[key] = power
-
-                return facts
 
             # check if this new n is still divisible by the same prime.
             # For as long as it works keep increasing the exponent value assigned to the prime, and dividing n
@@ -114,11 +95,10 @@ def get_prime_factors(n):
     # return our completed list of prime factors
     return prime_factors
 
+
 # Calculate s(n)
 @functools.cache
 def s(n):
-
-    global factorisations
 
     # 1 has no proper divisors
     if n == 1:
@@ -128,9 +108,7 @@ def s(n):
     # to calculate the sum of all the factors of n using only its prime factors
     total = 1
 
-    primes_dict = get_prime_factors(n)
-    primes = primes_dict.items()
-    factorisations[n] = primes_dict
+    primes = get_prime_factors(n).items()
 
     for prime, power in primes:
         total *= (prime**(power+1) - 1)/(prime - 1)
@@ -151,14 +129,14 @@ def aliq_seq(n, K=K_norm, I=I_norm):
     curr_n = n
     # loop max k times to compute and check each s(n)
     # return always ends the function so no more code will run after one of the checks is 'failed'
-    for k in range(K):
+    for k in range(K - 1):
 
         # check if sequence is terminated
         if curr_n == 0:
             return seq, 'terminated'
 
         # check if number is bigger than specified i
-        if curr_n > I:
+        if curr_n >= I:
             return seq, 'I reached'
 
         # check if sequence has looped
@@ -186,9 +164,10 @@ t1 = t.perf_counter()
 for i in range(1, n_max + 1):
     status = aliq_seq(i)[1]
     counts[status] += 1
-print(f'aliquot sequences generated in {t.perf_counter() - t1}s')
+t2 = t.perf_counter()
 
+print(f'generating and sorting aliquot sequences took {t2-t1}s')
+
+# output counts (for testing)
 print(counts)
-print(c2/c1)
-print(f'program finished after {t.perf_counter() - start_time}s')
-
+print(f'the full program takes {t.perf_counter() - start_time}s to run')
